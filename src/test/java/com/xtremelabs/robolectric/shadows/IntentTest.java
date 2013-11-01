@@ -4,7 +4,6 @@ import static com.xtremelabs.robolectric.Robolectric.shadowOf;
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertTrue;
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotSame;
@@ -374,13 +373,6 @@ public class IntentTest {
     }
 
     @Test
-    public void setUri_setsUri() throws Exception {
-        Intent intent = new Intent();
-        shadowOf(intent).setURI("http://foo");
-        assertThat(intent.toURI(), is("http://foo"));
-    }
-
-    @Test
     public void putStringArrayListExtra_addsListToExtras() {
         Intent intent = new Intent();
         final ArrayList<String> strings = new ArrayList<String>(Arrays.asList("hi", "there"));
@@ -403,15 +395,13 @@ public class IntentTest {
     @Test
     public void testParcelIo_explicitIntent() {
         Intent intent = new Intent(new Activity(), getClass());
-        putTestExtras(intent);
-        verifyIntentReadIsWhatWasWrittenToParcel(intent);
-    }
+        intent.putExtra("boolean", true);
+        intent.putExtra("string", "string value");
+        Bundle bundle = new Bundle();
+        bundle.putDouble("bundle double", 3.14);
+        intent.putExtra("bundle", bundle);
+        intent.putExtra("long", 893);
 
-    @Test
-    public void testParcelIo_actionUri() {
-        Intent intent = new Intent("action");
-        shadowOf(intent).setURI("http://foo");
-        putTestExtras(intent);
         verifyIntentReadIsWhatWasWrittenToParcel(intent);
     }
 
@@ -423,22 +413,28 @@ public class IntentTest {
         verifyIntentReadIsWhatWasWrittenToParcel(intent);
     }
 
-    private void verifyIntentReadIsWhatWasWrittenToParcel(Intent expected) {
-        Parcel parcel = Parcel.obtain();
-        expected.writeToParcel(parcel, 0);
-        Intent actual = new Intent();
-        actual.readFromParcel(parcel);
+    @Test
+    public void shouldHaveCreator() throws Exception {
+        Intent expected = new Intent("action");
+        expected.setType("type");
+        expected.addCategory("category");
+        Parcel p = Parcel.obtain();
+        expected.writeToParcel(p, 0);
+
+        p.setDataPosition(0);
+
+        Intent actual = Intent.CREATOR.createFromParcel(p);
         assertThat(expected, equalTo(actual));
     }
 
-    private void putTestExtras(Intent intent) {
-        intent.putExtra("boolean", true);
-        intent.putExtra("string", "string value");
-        Bundle bundle = new Bundle();
-        bundle.putDouble("bundle double", 3.14);
-        intent.putExtra("bundle", bundle);
-        int[] intArray = {1, 2, 3};
-        intent.putExtra("int array", intArray);
+    private void verifyIntentReadIsWhatWasWrittenToParcel(Intent expected) {
+        Parcel parcel = Parcel.obtain();
+        expected.writeToParcel(parcel, 0);
+        parcel.setDataPosition(0);
+        Intent actual = new Intent();
+        actual.readFromParcel(parcel);
+
+        assertThat(expected, equalTo(actual));
     }
 
     private static class TestSerializable implements Serializable {

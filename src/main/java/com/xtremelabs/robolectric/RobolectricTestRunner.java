@@ -9,6 +9,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.logging.Logger;
 
 import javassist.Loader;
 
@@ -44,6 +45,16 @@ import com.xtremelabs.robolectric.util.SQLiteMap;
  * provide a simulation of the Android runtime environment.
  */
 public class RobolectricTestRunner extends BlockJUnit4ClassRunner implements RobolectricTestRunnerInterface {
+
+    private static final String MANIFEST_PATH_PROPERTY = "robolectric.path.manifest";
+    private static final String RES_PATH_PROPERTY = "robolectric.path.res";
+    private static final String ASSETS_PATH_PROPERTY = "robolectric.path.assets";
+    private static final String DEFAULT_MANIFEST_PATH = "./AndroidManifest.xml";
+    private static final String DEFAULT_RES_PATH = "./res";
+    private static final String DEFAULT_ASSETS_PATH = "./assets";
+
+    private static final Logger logger =
+            Logger.getLogger(RobolectricTestRunner.class.getSimpleName());
 
     /** Instrument detector. We use it to check whether the current instance is instrumented. */
   	private static InstrumentDetector instrumentDetector = InstrumentDetector.DEFAULT;
@@ -99,7 +110,29 @@ public class RobolectricTestRunner extends BlockJUnit4ClassRunner implements Rob
      * @throws InitializationError if junit says so
      */
     public RobolectricTestRunner(final Class<?> testClass) throws InitializationError {
-        this(testClass, new RobolectricConfig(new File(".")));
+        this(testClass, new RobolectricConfig(
+                new File(getSystemProperty(MANIFEST_PATH_PROPERTY, DEFAULT_MANIFEST_PATH)),
+                new File(getSystemProperty(RES_PATH_PROPERTY, DEFAULT_RES_PATH)),
+                new File(getSystemProperty(ASSETS_PATH_PROPERTY, DEFAULT_ASSETS_PATH))));
+    }
+
+    /**
+     * Creates a runner to run {@code testClass}. Looks in your working directory for your AndroidManifest.xml file
+     * and res directory.
+     *
+     * @param testClass the test class to be run
+     * @param classLoader a custom RobolectricClassLoader to be used.
+     * @throws InitializationError if junit says so
+     */
+    public RobolectricTestRunner(final Class<?> testClass, RobolectricClassLoader classLoader)
+            throws InitializationError {
+        this(testClass,
+            isInstrumented() ? null : ShadowWrangler.getInstance(),
+            isInstrumented() ? null : classLoader,
+            new RobolectricConfig(
+                new File(getSystemProperty(MANIFEST_PATH_PROPERTY, DEFAULT_MANIFEST_PATH)),
+                new File(getSystemProperty(RES_PATH_PROPERTY, DEFAULT_RES_PATH)),
+                new File(getSystemProperty(ASSETS_PATH_PROPERTY, DEFAULT_ASSETS_PATH))));
     }
 
     /**
@@ -215,11 +248,12 @@ public class RobolectricTestRunner extends BlockJUnit4ClassRunner implements Rob
      * @throws InitializationError if junit says so
      */
     protected RobolectricTestRunner(final Class<?> testClass, final ClassHandler classHandler, final RobolectricClassLoader classLoader, final RobolectricConfig robolectricConfig, final DatabaseMap map) throws InitializationError {
-        super(isInstrumented() ? testClass : classLoader.bootstrap(testClass));
+        super(isInstrumented() ? testClass
+            : ensureClassLoaderNotNull(classLoader).bootstrap(testClass));
 
         if (!isInstrumented()) {
             this.classHandler = classHandler;
-            this.classLoader = classLoader;
+            this.classLoader = ensureClassLoaderNotNull(classLoader);
             this.robolectricConfig = robolectricConfig;
             this.databaseMap = setupDatabaseMap(testClass, map);
 
@@ -243,6 +277,11 @@ public class RobolectricTestRunner extends BlockJUnit4ClassRunner implements Rob
                 throw new RuntimeException(e);
             }
         }
+    }
+
+    private static RobolectricClassLoader ensureClassLoaderNotNull(
+        RobolectricClassLoader classLoader) {
+        return classLoader == null ? getDefaultLoader() : classLoader;
     }
 
     protected static boolean isInstrumented() {
@@ -376,6 +415,16 @@ public class RobolectricTestRunner extends BlockJUnit4ClassRunner implements Rob
      * Override this method to reset the state of static members before each test.
      */
     protected void resetStaticState() {
+    }
+
+    private static String getSystemProperty(String propertyName, String defaultValue) {
+        String property = System.getProperty(propertyName);
+        if (property == null) {
+            property = defaultValue;
+            logger.info("No system property " + propertyName + " found, default to "
+                    + defaultValue);
+        }
+        return property;
     }
 
     /**

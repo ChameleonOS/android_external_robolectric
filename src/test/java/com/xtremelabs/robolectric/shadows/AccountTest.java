@@ -27,9 +27,23 @@ public class AccountTest {
         p.writeString("name");
         p.writeString("type");
 
+        p.setDataPosition(0);
+
         Account account = new Account(p);
         assertThat(account.name, equalTo("name"));
         assertThat(account.type, equalTo("type"));
+    }
+
+    @Test
+    public void shouldHaveCreator() throws Exception {
+        Account expected = new Account("name", "type");
+        Parcel p = Parcel.obtain();
+        expected.writeToParcel(p, 0);
+
+        p.setDataPosition(0);
+
+        Account actual = Account.CREATOR.createFromParcel(p);
+        assertThat(expected, equalTo(actual));
     }
 
     @Test(expected = IllegalArgumentException.class)
